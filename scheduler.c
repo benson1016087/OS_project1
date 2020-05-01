@@ -17,6 +17,7 @@
 
 int exec_num = 0; // the number of process that ready_t <= now_t
 int finish_num = 0; // the number of finished process
+int queue[1024], front_idx = 0, end_idx = 0;
 
 int get_next_process(process todo[], int policy, int last_idx){
 	if(policy <= 1){ // SJF or PSJF
@@ -34,16 +35,14 @@ int get_next_process(process todo[], int policy, int last_idx){
 			if(todo[i].exec_t > 0)
 				return i;
 	}
-	else{
-		int next_idx;
-
-		next_idx = (last_idx + 1) % exec_num;
-		for(int t = 0; t < exec_num; t++){
-			if(todo[next_idx].exec_t > 0){
-				//fprintf(stderr, "select idx = %d\n", next_idx);
-				return next_idx;
-			}
-			next_idx = (next_idx + 1) % exec_num;
+	else{ // RR
+		if(front_idx == end_idx)
+			return -1;
+		else{
+			int ret = queue[front_idx];
+			front_idx = (front_idx + 1) % 1024;
+			//fprintf(stderr, "%d\n", ret+1);
+			return ret;
 		}
 	}
 	return -1;
@@ -54,6 +53,8 @@ void scheduler(int policy, process todo[], int process_num){
 	int now_t = 0;
 	int running_idx = -1; 
 	int finish_t = -1; // the finish time of this process, not used in non-preemptive 
+	for(int i = 0; i < 1024; i++)
+		queue[i] = -1;
 
 	while(1){
 		/*
@@ -70,6 +71,8 @@ void scheduler(int policy, process todo[], int process_num){
 				//fprintf(stderr, "i = %d, now_t = %d\n", i, now_t);
 				exec_num ++;
 				todo[i].pid = fork_process(todo[i]);
+				queue[end_idx] = i;
+				end_idx = (end_idx + 1) % 1024;
 			}
 
 		// get next process's idx
@@ -98,9 +101,15 @@ void scheduler(int policy, process todo[], int process_num){
 				
 				finish_num ++;
 			}
-			if((policy == 3 && finish_t == now_t) || policy == 0)
+			if(policy == 0)
 				if(todo[running_idx].exec_t > 0)
 					stop_process(todo[running_idx].pid);
+			if(policy == 3 && finish_t == now_t)
+				if(todo[running_idx].exec_t > 0){
+					stop_process(todo[running_idx].pid);
+					queue[end_idx] = running_idx;
+					end_idx = (end_idx + 1) % 1024;
+				}
 		}
 	}
 	
